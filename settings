@@ -1,0 +1,46 @@
+#!/bin/bash
+#h-------------------------------------------------------------------------------
+#h
+#h Name:         settings
+#h Type:         Linux shell script
+#h Purpose:      settings for packet read_LOGAREX
+#h Project:      
+#h Usage:        . `dirname $(readlink -f $0)`/settings
+#h Result:       
+#h Examples:     
+#h Outline:      
+#h Resources:    
+#h Platforms:    Linux
+#h Authors:      peb piet66
+#h Version:      V1.0.0 2023-01-27/peb
+#v History:      V1.0.0 2022-12-25/peb first version
+#h Copyright:    (C) piet66 2022
+#h License:      MIT
+#h
+#h-------------------------------------------------------------------------------
+
+MODULE='settings';
+VERSION='V1.0.0'
+WRITTEN='2023-01-27/peb'
+
+#serial IR input device (created with udev rule):
+DEV=/dev/LOGAREX
+
+#storage control
+STORE_LOCAL_RBB=false
+STORE_REMOTE_RBB=true
+STORE_ZWAY=true
+
+##parameters for rrdtool:
+export RRD_NAME=electric_meter
+
+##local database:
+export RRD_FILE=${RRD_NAME}.rrd
+export RRD_DIR=../RRDTool_API/rrd
+
+##remote database:
+export IP=rrd_server
+export PORT=5001
+export USER_PW=username:secret
+export REPEAT=5m
+

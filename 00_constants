@@ -1,0 +1,37 @@
+#!/bin/bash
+#h-------------------------------------------------------------------------------
+#h
+#h Name:         constants
+#h Type:         Linux shell script
+#h Purpose:      define constants for packet LOGAREX
+#h Project:      
+#h Usage:        #set path constants
+#h               . `dirname $(readlink -f $0)`/00_constants
+#h Result:       
+#h Examples:     
+#h Outline:      
+#h Resources:    
+#h Platforms:    Linux
+#h Authors:      peb piet66
+#h Version:      V1.0.0 2023-01-07/peb
+#v History:      V1.0.0 2022-11-20/peb first version
+#h Copyright:    (C) piet66 2022
+#h License:      MIT
+#h
+#h-------------------------------------------------------------------------------
+
+MODULE='constants';
+VERSION='V1.0.0'
+WRITTEN='2023-01-07/peb'
+
+PACKET_NAME=read_LOGAREX
+PACKET_PATH=`dirname $(readlink -f $0)`
+PACKET_DIR=`basename $PACKET_PATH`
+echo PACKET_NAME=$PACKET_NAME
+echo PACKET_PATH=$PACKET_PATH
+echo PACKET_DIR=$PACKET_DIR
+echo ''
+
+cd $PACKET_PATH
+
+
