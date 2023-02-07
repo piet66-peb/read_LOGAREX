@@ -14,25 +14,25 @@
 #h                   300 baud, 7N1, no flow control, no handshake, pull mode,
 #h                   no pin required
 #h                   pull request: '/?!\r\n' = '\x2F\x3F\x21\x0D\x0A'
-#h                   response data format: OBIS protocol (ASCII text)
+#h                   response data format: OBIS/EDIS protocol (ASCII text)
 #h               data sent by electric meter after every pull request:
-#h                   /LOG4LK13BD102015
-#h                   C.1.0(NNNNNNNN)
-#h                   0.0.0(NNNNNNNNNNNNNN)
-#h                   F.F(0000)
-#h                   1.8.0(035070.523*kWh)
-#h                   C.7.1(00000002)
-#h                   C.7.2(00000001)
-#h                   C.7.3(00000001)
-#h                   0.2.1(ver.02, 130314, 41BD)
-#h                   C.2.1(1412201128)
-#h                   C.2.9(1412201128)
+#h                   /LOG4LK13BD102015              #meter type
+#h                   C.1.0(NNNNNNNN)                #meter id manufacturer
+#h                   0.0.0(NNNNNNNNNNNNNN)          #meter id supplier
+#h                   F.F(0000)                      #error code
+#h                   1.8.0(035070.523*kWh)          #OBIS meter reading single tariff
+#h                   C.7.1(00000002)                #count phase failure l1
+#h                   C.7.2(00000001)                #                    l2
+#h                   C.7.3(00000001)                #                    l3
+#h                   0.2.1(ver.02, 130314, 41BD)    #versions
+#h                   C.2.1(1412201128)              #event parameters change-timestamp
+#h                   C.2.9(1412201128)              #last read
 #h                   !
 #h               remarks:
 #h                   - LOGAREX has shipped the same meter type with different firmwares
-#h                      ver.02, 130314, 41BD: needs 1 request string
-#h                      ver.02, 150228, 671A: needs a second request string
-#h                   - for testing of correct position: the meter mirrors any ascii 
+#h                      ver.02, 130314, 41BD: needs 1 pull request
+#h                      ver.02, 150228, 671A: needs a second pull request
+#h                   - for testing of correct optohead position: the meter mirrors any ascii 
 #h                     string.
 #h               helpful links:
 #h                   https://www.automaten-karl.de/?p=914
@@ -68,7 +68,7 @@
 #h               ./store_zway.bash
 #h Platforms:    Linux
 #h Authors:      peb piet66
-#h Version:      V2.0.0 2023-02-01/peb
+#h Version:      V2.0.0 2023-02-07/peb
 #v History:      V1.0.0 2022-05-31/peb first version
 #v               V1.3.0 2022-11-20/peb [+]STORE_COMMAND
 #v               V2.0.0 2022-11-20/peb [*]some refactoring
@@ -78,7 +78,7 @@
 #h-------------------------------------------------------------------------------
 
 VERSION='V2.0.0'
-WRITTEN='2023-02-01/peb'
+WRITTEN='2023-02-07/peb'
 
 cd `dirname $0`
 SN=`basename $0`
@@ -93,16 +93,16 @@ logger -i "$SN started."
 #---------------
 . ./settings >>$LOG 2>&1
 
-if [ "$DEV" == "" ] || [ ! -c "$DEV" ]
+if [ ! -c "$DEV" ]
 then
-    mess="serial input IR device $DEV not found."
+    mess="serial input IR device $DEV not found, waiting..."
     logger -is "$SN $mess" >>$LOG 2>&1
 
     #wait 1 minute after boot till device is ready
     sleep 1m
-    if [ "$DEV" == "" ] || [ ! -c "$DEV" ]
+    if [ ! -c "$DEV" ]
     then
-        mess="serial input IR device $DEV not found, break!"
+        mess="serial input IR device $DEV not found, exit!"
         logger -is "$SN $mess" >>$LOG 2>&1
         exit 1
     fi
@@ -162,7 +162,7 @@ function compute_rrd_time() {
     #b read in infinite loop
     #-----------------------
     echo listening to $DEV...
-    #cat -A $DEV | while read line    ' >> show also non-printing characters
+    #cat -A $DEV | while read line    # >> get also non-printing characters
     cat $DEV | while read line
                do
                   [  "$line" != "" ] && echo "$line"
@@ -177,10 +177,10 @@ function compute_rrd_time() {
                     #-------------------------------------------
                     $PATTERN_180)
                         #parameter expansion:
-                        ###general statement
-                        ###a="${line#*\(}"; value="${a%\**}"
+                        ###a="${line#*\(}"      #remove first part till '('
+                        ###value="${a%\**}"     #remove last part from '*' on
                         value=${line:6:-5}
-                        VAL_Wh=${value/./} #real >>> integer, kWh >>> Wh
+                        VAL_Wh=${value/./}      #real >>> integer, kWh >>> Wh
                         compute_rrd_time
 
                         if [ "$STORE_LOCAL_RBB" == true ]

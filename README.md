@@ -24,6 +24,8 @@ An electric meter with an infrared interface, a USB infrared optohead cable,
 and a Linux system with bash.
 No other software is needed to read the meter.
 
+The meter should use the OBIS protocol with printable characters.
+
 ## Installation
 
 * Prepare the electric meter for data transmission.
