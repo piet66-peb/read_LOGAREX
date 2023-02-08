@@ -20,11 +20,9 @@ This script
 
 ## Requirements
 
-An electric meter with an infrared interface, a USB infrared optohead cable, 
+An electric meter with an infrared interface using the standard IEC 62056-21 with printable output for data exchange, a USB infrared optohead cable, 
 and a Linux system with bash.
 No other software is needed to read the meter.
-
-The meter should use the OBIS protocol with printable characters.
 
 ## Installation
 

@@ -14,7 +14,8 @@
 #h                   300 baud, 7N1, no flow control, no handshake, pull mode,
 #h                   no pin required
 #h                   pull request: '/?!\r\n' = '\x2F\x3F\x21\x0D\x0A'
-#h                   response data format: OBIS/EDIS protocol (ASCII text)
+#h                   interface protocol: IEC 62056-21 standard
+#h                   response data format: IEC 62056-61 OBIS/EDIS (ASCII text)
 #h               data sent by electric meter after every pull request:
 #h                   /LOG4LK13BD102015              #meter type
 #h                   C.1.0(NNNNNNNN)                #meter id manufacturer
@@ -24,14 +25,14 @@
 #h                   C.7.1(00000002)                #count phase failure l1
 #h                   C.7.2(00000001)                #                    l2
 #h                   C.7.3(00000001)                #                    l3
-#h                   0.2.1(ver.02, 130314, 41BD)    #versions
+#h                   0.2.1(ver.02, 130314, 41BD)    #firmware version, date, checksum
 #h                   C.2.1(1412201128)              #event parameters change-timestamp
 #h                   C.2.9(1412201128)              #last read
 #h                   !
 #h               remarks:
 #h                   - LOGAREX has shipped the same meter type with different firmwares
-#h                      ver.02, 130314, 41BD: needs 1 pull request
-#h                      ver.02, 150228, 671A: needs a second pull request
+#h                      ver.02, 130314, 41BD: needs only a pull request
+#h                      ver.02, 150228, 671A: needs an acknowledge
 #h                   - for testing of correct optohead position: the meter mirrors any ascii 
 #h                     string.
 #h               helpful links:
@@ -68,7 +69,7 @@
 #h               ./store_zway.bash
 #h Platforms:    Linux
 #h Authors:      peb piet66
-#h Version:      V2.0.0 2023-02-07/peb
+#h Version:      V2.0.0 2023-02-08/peb
 #v History:      V1.0.0 2022-05-31/peb first version
 #v               V1.3.0 2022-11-20/peb [+]STORE_COMMAND
 #v               V2.0.0 2022-11-20/peb [*]some refactoring
@@ -78,7 +79,7 @@
 #h-------------------------------------------------------------------------------
 
 VERSION='V2.0.0'
-WRITTEN='2023-02-07/peb'
+WRITTEN='2023-02-08/peb'
 
 cd `dirname $0`
 SN=`basename $0`
@@ -115,8 +116,8 @@ fi
 #serial interface
 BAUD=300
 PATTERN_180="1.8.0\(*\*kWh\)"   #line="1.8.0(035070.523*kWh)"
-REQUEST_1='/?!'
-REQUEST_2='\x06\x30\x30\x30'
+REQUEST='/?!'
+ACK='\x06\x30\x30\x30'
 
 #b functions
 #-----------
@@ -154,7 +155,7 @@ function compute_rrd_time() {
         echo ''
         echo --- sleeping $sleep_next seconds...
         sleep $sleep_next
-        echo -n -e $REQUEST_1'\r\n' > $DEV
+        echo -n -e $REQUEST'\r\n' > $DEV
         last_run=$next_run
         (( next_run=last_run+STEP ));
     done &
@@ -167,19 +168,18 @@ function compute_rrd_time() {
                do
                   [  "$line" != "" ] && echo "$line"
                   case "$line" in 
-                    # #b send second request
-                    # #---------------------
-                    # $REQUEST_1)
-                    #     echo -n -e $REQUEST_2'\r\n' > $DEV
+                    # #b send ack
+                    # #----------
+                    # $REQUEST)
+                    #     echo -n -e $ACK'\r\n' > $DEV
                     #     ;;
 
                     #b strip value for OBIS 1.8.0 and do storage
                     #-------------------------------------------
                     $PATTERN_180)
                         #parameter expansion:
-                        ###a="${line#*\(}"      #remove first part till '('
-                        ###value="${a%\**}"     #remove last part from '*' on
-                        value=${line:6:-5}
+                        a="${line#*\(}"         #remove first part till '('
+                        value="${a%\**}"        #remove last part from '*' on
                         VAL_Wh=${value/./}      #real >>> integer, kWh >>> Wh
                         compute_rrd_time
 
