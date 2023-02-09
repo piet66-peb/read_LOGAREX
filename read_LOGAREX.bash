@@ -12,10 +12,11 @@
 #h               year of manufacture: 2015
 #h               parameters: 
 #h                   300 baud, 7N1, no flow control, no handshake, pull mode,
-#h                   no pin required
+#h                   no pin
 #h                   pull request: '/?!\r\n' = '\x2F\x3F\x21\x0D\x0A'
 #h                   interface protocol: IEC 62056-21 standard
 #h                   response data format: IEC 62056-61 OBIS/EDIS (ASCII text)
+#h                   protocol mode C
 #h               data sent by electric meter after every pull request:
 #h                   /LOG4LK13BD102015              #meter type
 #h                   C.1.0(NNNNNNNN)                #meter id manufacturer
@@ -30,15 +31,15 @@
 #h                   C.2.9(1412201128)              #last read
 #h                   !
 #h               remarks:
-#h                   - LOGAREX has shipped the same meter type with different firmwares
-#h                      ver.02, 130314, 41BD: needs only a pull request
-#h                      ver.02, 150228, 671A: needs an acknowledge
-#h                   - for testing of correct optohead position: the meter mirrors any ascii 
-#h                     string.
+#h                   for testing of correct optohead position: the meter mirrors any ascii 
+#h                   string.
 #h               helpful links:
 #h                   https://www.automaten-karl.de/?p=914
 #h                   https://shop.weidmann-elektronik.de/media/files_public/9d73b590bf0752a5beff32d229d4497d/HowToRaspberryPi.pdf
 #h                   http://www.weidmann-elektronik.de/Downloads.html
+#h                   https://www.ungelesen.net/protagWork/media/downloads/solar-steuerung/iec62056-21%7Bed1.0%7Den_.pdf
+#h                   https://www.ungelesen.net/protagWork/media/downloads/solar-steuerung/volkszaehler_elster_as1440.pdf
+#h 
 #h Installation: - detect the id of the serial device /dev/ttyUSBx of the IR reader:
 #h                 ls /dev/ttyUSB*
 #h                 >> plugin USB device
@@ -69,7 +70,7 @@
 #h               ./store_zway.bash
 #h Platforms:    Linux
 #h Authors:      peb piet66
-#h Version:      V2.0.0 2023-02-08/peb
+#h Version:      V2.0.0 2023-02-09/peb
 #v History:      V1.0.0 2022-05-31/peb first version
 #v               V1.3.0 2022-11-20/peb [+]STORE_COMMAND
 #v               V2.0.0 2022-11-20/peb [*]some refactoring
@@ -79,7 +80,7 @@
 #h-------------------------------------------------------------------------------
 
 VERSION='V2.0.0'
-WRITTEN='2023-02-08/peb'
+WRITTEN='2023-02-09/peb'
 
 cd `dirname $0`
 SN=`basename $0`
@@ -114,10 +115,12 @@ fi
 . ./rrd_info.bash >>$LOG 2>&1
 
 #serial interface
-BAUD=300
+BAUD_0=300
+BAUD_4=4800
 PATTERN_180="1.8.0\(*\*kWh\)"   #line="1.8.0(035070.523*kWh)"
-REQUEST='/?!'
-ACK='\x06\x30\x30\x30'
+REQUEST_INI='/?!'
+ACK_0='\x06\x30\x30\x30'        #ack for 300 baud
+ACK_4='\x06\x30\x34\x30'        #ack for 4800 baud
 
 #b functions
 #-----------
@@ -143,7 +146,7 @@ function compute_rrd_time() {
     #-----------------------------
     # LOGAREX LK13BD102015: 300 baud, 7N1, no flow control, no handshake:
     #stty -F $DEV sane
-    stty -F $DEV $BAUD -parodd cs7 -cstopb parenb -ixoff -crtscts -hupcl -ixon -opost -onlcr -isig -icanon -iexten -echo -echoe -echoctl -echoke
+    stty -F $DEV $BAUD_0 -parodd cs7 -cstopb parenb -ixoff -crtscts -hupcl -ixon -opost -onlcr -isig -icanon -iexten -echo -echoe -echoctl -echoke
   
     #b trigger pull request in loop, synchronized with rrd database
     #--------------------------------------------------------------
@@ -153,54 +156,84 @@ function compute_rrd_time() {
     do
         sleep_next=`delay $next_run`
         echo ''
-        echo --- sleeping $sleep_next seconds...
+        echo --- next request in $sleep_next seconds...
         sleep $sleep_next
-        echo -n -e $REQUEST'\r\n' > $DEV
+        stty -F $DEV $BAUD_0
+        echo -n -e $REQUEST_INI'\r\n' > $DEV
         last_run=$next_run
         (( next_run=last_run+STEP ));
     done &
 
-    #b read in infinite loop
-    #-----------------------
-    echo listening to $DEV...
-    #cat -A $DEV | while read line    # >> get also non-printing characters
-    cat $DEV | while read line
-               do
-                  [  "$line" != "" ] && echo "$line"
-                  case "$line" in 
-                    # #b send ack
-                    # #----------
-                    # $REQUEST)
-                    #     echo -n -e $ACK'\r\n' > $DEV
-                    #     ;;
+    #b in infinite loop
+    #------------------
+    BAUD_CURR=$BAUD_0
+    while true
+    do
+        #b listening with current baud rate
+        #----------------------------------
+        stty -F $DEV $BAUD_CURR
+        echo listening to $DEV with baud rate `stty -F $DEV speed`...
+        while read line
+        do
+           [  "$line" != "" ] && echo "$line"
 
-                    #b strip value for OBIS 1.8.0 and do storage
-                    #-------------------------------------------
-                    $PATTERN_180)
-                        #parameter expansion:
-                        a="${line#*\(}"         #remove first part till '('
-                        value="${a%\**}"        #remove last part from '*' on
-                        VAL_Wh=${value/./}      #real >>> integer, kWh >>> Wh
-                        compute_rrd_time
+           case "$line" in 
+             ####
+             #### changing the baud rate has no benefit for this meter
+             ####
 
-                        if [ "$STORE_LOCAL_RBB" == true ]
-                        then
-                            echo "   ./store_rrd_local.bash $rrd_time ${value}:$VAL_Wh"
-                            ./store_rrd_local.bash $rrd_time ${value}:$VAL_Wh
-                        fi
+             #### #b break listening at data end and reset baud rate
+             #### #-------------------------------------------------
+             #### !)
+             ####     BAUD_CURR=$BAUD_0
+             ####     break
+             ####     ;;
+    
+             #### #b send ack and set new baud rate
+             #### #--------------------------------
+             #### */LOG4*)
+             ####     echo -n -e $ACK_4'\r\n' > $DEV
+             ####     BAUD_CURR=$BAUD_4
+             ####     break
+             ####     ;;
+    
+             #b send ack for baud rate 300
+             #----------------------------
+             */LOG4*)
+                 echo -n -e $ACK_0'\r\n' > $DEV
+                 ;;
+    
+             #b strip value for OBIS 1.8.0 and do storage
+             #-------------------------------------------
+             $PATTERN_180*)
+                 #parameter expansion:
+                 a="${line#*\(}"         #remove first part till '('
+                 value="${a%\**}"        #remove last part from '*' on
+                 VAL_Wh=${value/./}      #real >>> integer, kWh >>> Wh
+                 compute_rrd_time
+    
+                 if [ "$STORE_LOCAL_RBB" == true ]
+                 then
+                     echo "   ./store_rrd_local.bash $rrd_time ${value}:$VAL_Wh"
+                     ./store_rrd_local.bash $rrd_time ${value}:$VAL_Wh &
+                 fi
+    
+                 if [ "$STORE_REMOTE_RBB" == true ]
+                 then
+                     echo "   ./store_rrd_remote.bash $rrd_time ${value}:$VAL_Wh"
+                     ./store_rrd_remote.bash $rrd_time ${value}:$VAL_Wh &
+                 fi
+    
+                 if [ "$STORE_ZWAY" == true ]
+                 then
+                     echo "   ./store_zway.bash $rrd_time ${value}"
+                     ./store_zway.bash $rrd_time ${value} &
+                 fi
+    
+                 ;;
+           esac
+        done <"$DEV"
+        echo ''
+    done
 
-                        if [ "$STORE_REMOTE_RBB" == true ]
-                        then
-                            echo "   ./store_rrd_remote.bash $rrd_time ${value}:$VAL_Wh"
-                            ./store_rrd_remote.bash $rrd_time ${value}:$VAL_Wh
-                        fi
-
-                        if [ "$STORE_ZWAY" == true ]
-                        then
-                            echo "   ./store_zway.bash $rrd_time ${value}"
-                            ./store_zway.bash $rrd_time ${value}
-                        fi
-
-                        ;;
-                  esac
-               done
+    echo program exited.
