@@ -32,9 +32,9 @@ No other software is needed to read the meter.
 ## Installation
 
 * Prepare the electric meter for data transmission.
-* Connect the meter via an optohead cable with an USB port of your system.
+* Connect the meter via an optohead cable with a USB port of your system.
 * Find the used Linux device name (for example with **ls /dev/ttyUSB\***).
-* Add an udev rule for this serial infrared device (see below). This rule creates a 
+* Add a udev rule for this serial infrared device (see below). This rule creates a 
 descriptive name for the serial interface, independently of the currently used 
 physical USB port, and adds the necessary rights for the user.
 * Put the packet on any place of your choice. 
