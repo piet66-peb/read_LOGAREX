@@ -65,7 +65,7 @@
 #h               ./store_zway.bash
 #h Platforms:    Linux
 #h Authors:      peb piet66
-#h Version:      V2.0.0 2023-02-10/peb
+#h Version:      V2.0.0 2023-02-11/peb
 #v History:      V1.0.0 2022-05-31/peb first version
 #v               V1.3.0 2022-11-20/peb [+]STORE_COMMAND
 #v               V2.0.0 2022-11-20/peb [*]some refactoring
@@ -75,7 +75,7 @@
 #h-------------------------------------------------------------------------------
 
 VERSION='V2.0.0'
-WRITTEN='2023-02-10/peb'
+WRITTEN='2023-02-11/peb'
 
 cd `dirname $0`
 SN=`basename $0`
@@ -123,8 +123,8 @@ function compute_rrd_time() {
     step=$STEP
     currtime=$(date +%s)             #current time in seconds
     (( rrd_time=(currtime/step)*step ));
-    echo "   currtime=$currtime"
-    echo "   rrd_time=$rrd_time"
+    echo "currtime=$currtime"
+    echo "rrd_time=$rrd_time"
 }
 
 #b commands
@@ -163,9 +163,32 @@ function compute_rrd_time() {
            [  "$line" != "" ] && echo "$line"
 
            case "$line" in 
-             #b end of datablock 6.3.4: break listening and reset baud rate for next request
-             #------------------------------------------------------------------------------
+             #b end of datablock 6.3.4: 
+             #b store data, break listening and reset baud rate for next request
+             #------------------------------------------------------------------
              !)
+                 compute_rrd_time
+    
+                 values=${val180}:${val180Wh}
+
+                 if [ "$STORE_LOCAL_RBB" == true ]
+                 then
+                     echo ">> ./store_rrd_local.bash $rrd_time $values"
+                     ./store_rrd_local.bash $rrd_time $values &
+                 fi
+    
+                 if [ "$STORE_REMOTE_RBB" == true ]
+                 then
+                     echo ">> ./store_rrd_remote.bash $rrd_time $values"
+                     ./store_rrd_remote.bash $rrd_time $values &
+                 fi
+    
+                 if [ "$STORE_ZWAY" == true ]
+                 then
+                     echo ">> ./store_zway.bash $rrd_time $val180"
+                     ./store_zway.bash $rrd_time $val180 &
+                 fi
+
                  BAUD=300
                  break
                  ;;
@@ -183,33 +206,13 @@ function compute_rrd_time() {
                  break
                  ;;
     
-             #b OBIS 1.8.0: strip value and do storage
-             #----------------------------------------
+             #b OBIS 1.8.0: strip value
+             #-------------------------
              *1.8.0*)
                  #parameter expansion:
                  a="${line#*\(}"         #remove first part till '('
-                 value="${a%\**}"        #remove last part from '*' on
-                 valueWh=${value/./}     #real >>> integer, kWh >>> Wh
-                 compute_rrd_time
-    
-                 if [ "$STORE_LOCAL_RBB" == true ]
-                 then
-                     echo "   ./store_rrd_local.bash $rrd_time ${value}:$valueWh"
-                     ./store_rrd_local.bash $rrd_time ${value}:$valueWh &
-                 fi
-    
-                 if [ "$STORE_REMOTE_RBB" == true ]
-                 then
-                     echo "   ./store_rrd_remote.bash $rrd_time ${value}:$valueWh"
-                     ./store_rrd_remote.bash $rrd_time ${value}:$valueWh &
-                 fi
-    
-                 if [ "$STORE_ZWAY" == true ]
-                 then
-                     echo "   ./store_zway.bash $rrd_time ${value}"
-                     ./store_zway.bash $rrd_time ${value} &
-                 fi
-    
+                 val180="${a%\**}"       #remove last part from '*' on
+                 val180Wh=${val180/./}   #real >>> integer, kWh >>> Wh
                  ;;
            esac
         done <"$DEV"
