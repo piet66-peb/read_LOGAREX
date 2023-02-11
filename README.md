@@ -18,6 +18,11 @@ This script
 
 ![](read_LOGAREX.png)
 
+RRDtool is not only a database software, it also provides a graphing function. It could look like this:
+
+![](example.png)
+
+
 ## Requirements
 
 An electric meter with an infrared interface using the standard IEC 62056-21 with printable output for data exchange, a USB infrared optohead cable, 
