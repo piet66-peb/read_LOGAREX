@@ -65,7 +65,7 @@
 #h               ./store_zway.bash
 #h Platforms:    Linux
 #h Authors:      peb piet66
-#h Version:      V2.0.0 2023-02-11/peb
+#h Version:      V2.0.0 2023-02-27/peb
 #v History:      V1.0.0 2022-05-31/peb first version
 #v               V1.3.0 2022-11-20/peb [+]STORE_COMMAND
 #v               V2.0.0 2022-11-20/peb [*]some refactoring
@@ -74,8 +74,9 @@
 #h
 #h-------------------------------------------------------------------------------
 
+MODULE='read_LOGAREX.bash';
 VERSION='V2.0.0'
-WRITTEN='2023-02-11/peb'
+WRITTEN='2023-02-27/peb'
 
 cd `dirname $0`
 SN=`basename $0`
@@ -163,6 +164,30 @@ function compute_rrd_time() {
            [  "$line" != "" ] && echo "$line"
 
            case "$line" in 
+             #b ident message 6.3.2: 
+             #b send ack 6.3.3 and tell meter how to proceed (change baud rate)
+             #-----------------------------------------------------------------
+             /LOG*)   # /LOG4: 4=possible baud rate: 4800
+                 V=0    # Protocol control character (see 6.4.5.2), 0=normal protocol
+                 Z=4    # Baud rate identification, 0=300, 4=4800
+                 Y=0    # Mode control character (see 6.4.5.3), 0=data readout
+                 Z=${line:4:1}  #take 5th character from line
+                 ACK='\x06'$V$Z$Y
+                 echo $ACK
+                 echo -n -e $ACK'\r\n' > $DEV
+                 BAUD=4800
+                 break
+                 ;;
+    
+             #b OBIS 1.8.0: strip value
+             #-------------------------
+             *1.8.0*)
+                 #parameter expansion:
+                 a="${line#*\(}"         #remove first part till '('
+                 val180="${a%\**}"       #remove last part from '*' on
+                 val180Wh=${val180/./}   #real >>> integer, kWh >>> Wh
+                 ;;
+
              #b end of datablock 6.3.4: 
              #b store data, break listening and reset baud rate for next request
              #------------------------------------------------------------------
@@ -191,28 +216,6 @@ function compute_rrd_time() {
 
                  BAUD=300
                  break
-                 ;;
-    
-             #b ident message 6.3.2: 
-             #b send ack 6.3.3 and tell meter how to proceed (change baud rate)
-             #-----------------------------------------------------------------
-             */LOG4*)   # 4=possible baud rate: 4800
-                 V=0    # Protocol control character (see 6.4.5.2), 0=normal protocol
-                 Z=4    # Baud rate identification, 0=300, 4=4800
-                 Y=0    # Mode control character (see 6.4.5.3), 0=data readout
-                 ACK='\x06'$V$Z$Y
-                 echo -n -e $ACK'\r\n' > $DEV
-                 BAUD=4800
-                 break
-                 ;;
-    
-             #b OBIS 1.8.0: strip value
-             #-------------------------
-             *1.8.0*)
-                 #parameter expansion:
-                 a="${line#*\(}"         #remove first part till '('
-                 val180="${a%\**}"       #remove last part from '*' on
-                 val180Wh=${val180/./}   #real >>> integer, kWh >>> Wh
                  ;;
            esac
         done <"$DEV"

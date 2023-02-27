@@ -1,6 +1,6 @@
 <!-- use sgmlproc for generating a html file -->
 
-![](icon.png)
+[![](icon.png)](https://github.com/piet66-peb?tab=repositories)
 
 # read_LOGAREX
 
